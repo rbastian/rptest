@@ -11,18 +11,23 @@ module Helpers
       ContextIO.new(api_key, api_secret) 
   end
 
-  def self.process_message message
+  def self.extract_text_from_message_body_part message
     body_part = message.body_parts.first
     content = body_part.content
+    extracted_text = Array.new
     if content
       doc = Nokogiri::HTML.parse(content)
-      node_set = doc.xpath("//a[@href[contains(.,'/users/')]]")
+      node_set = doc.xpath("//a[@href[contains(.,'http://bitbuddy.com/users/')]]")
       node_set.each do | node |
-        puts "#{node.attributes.fetch('href').value} #{node.children.text.strip.split.join(' ')}"
+        profile_url = node.attributes.fetch('href').value
+        name = node.children.text.strip.split.join(' ')
+        extracts = { "profile_url" => profile_url, "name" => name }
+        extracted_text.push extracts
       end
     else
       puts '...empty content, skipping message.'
     end
+    extracted_text
   end
 end
 
@@ -51,7 +56,15 @@ rescue Exception => e
 end
 
 messages.each do | message |
-  Helpers.process_message message
+  begin
+    text = Helpers.extract_text_from_message_body_part message
+  rescue Exception => e
+    puts "Caught exception processing message: #{e.message}"
+  end
+
+  text.each do | text |
+    puts text.values.join(' ')
+  end 
 end
 
 puts 'Done.'
