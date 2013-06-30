@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+require 'contextio'
+require 'nokogiri'
+require 'YAML'
+
+module Helpers
+  def self.get_contextio
+      oauth = Psych.load_file(File.dirname('__FILE__') + "/oauth.yml")
+      api_key = oauth['contextio']['api_key']
+      api_secret = oauth['contextio']['api_secret']
+      ContextIO.new(api_key, api_secret) 
+  end
+
+  def self.process_message message
+    body_part = message.body_parts.first
+    content = body_part.content
+    if content
+      doc = Nokogiri::HTML.parse(content)
+      node_set = doc.xpath("//a[@href[contains(.,'/users/')]]")
+      node_set.each do | node |
+        puts "#{node.attributes.fetch('href').value} #{node.children.text.strip.split.join(' ')}"
+      end
+    else
+      puts '...empty content, skipping message.'
+    end
+  end
+end
+
+puts 'Starting scan for bitbuddy friends...'
+begin
+  contextio = Helpers.get_contextio
+rescue Exception => e
+  puts "Caught Exception trying to load contextio credentials: #{e.message}"
+  exit(-1)
+end
+
+begin
+  account = contextio.accounts.first
+  puts "Got account = #{account.id}"
+rescue Exception => e
+  puts "Caught Exception accessing account: #{e.message}"
+  exit(-1)
+end
+
+begin
+  messages = account.messages.where(:subject => 'New Friends On BitBuddy.com!')
+  puts "Found #{messages.count} messages from BitBuddy."
+rescue Exception => e
+  puts "Caught Exception retreiving messages: #{e.message}"
+  exit(-1)
+end
+
+messages.each do | message |
+  Helpers.process_message message
+end
+
+puts 'Done.'
+
